@@ -26,11 +26,11 @@ in the "eval is the spec" discipline (falkster.com/handbook/the-eval-is-the-spec
    rows yourself and treat them as ground truth.
 3. **Stage discipline.** Don't start Discover-stage (clustering/scoring) work
    until Sense-stage (extraction) is passing its eval bar defined in
-   `evals/signal-extraction.md`. Don't start Decide-stage work until
-   `evals/decide-classification.md` has real hand-labeled rows (not the
-   PENDING placeholders it currently has). Don't build Railway deployment
-   until Decide is eval-passing — per user decision on 2026-07-22, one
+   `evals/signal-extraction.md`. Don't build Railway deployment until
+   Decide is eval-passing — per user decision on 2026-07-22, one
    deployment after Decide lands beats deploying now and redeploying later.
+   (All three stages are eval-passing as of 2026-07-22 — Railway deployment
+   is the next real gap.)
 4. **Keep prompts traceable to their eval file.** If an agent's prompt changes,
    the corresponding eval file's labeling criteria should be updated first (or
    the change explained against the existing criteria), then the eval re-run
@@ -75,12 +75,11 @@ specs (auth, endpoints, rate limits, field mapping) are in `docs/data-sources.md
 5. Build the Discover-stage scoring agent against that eval file.
 6. Delivery layer (digest + query interface).
 7. Hand-label `evals/decide-classification.md` from real Discover-stage
-   output (added 2026-07-22).
-8. Build the Decide-stage classification agent (`agents/decide_agent.py`,
-   not yet created) against that eval file.
-9. Railway deployment (Postgres + scheduled worker + web service) — build
-   and deploy once Decide is eval-passing, not before, so there's one
-   deployment instead of two.
+   output — DONE, 2026-07-22.
+8. Build the Decide-stage classification agent (`agents/decide_agent.py`)
+   against that eval file — DONE, eval-passing at 19/21 (90.5%), 2026-07-22.
+9. Railway deployment (Postgres + scheduled worker + web service) — next up,
+   now that Decide is eval-passing.
 
 No dates attached to this — it's sequence, not a schedule.
 

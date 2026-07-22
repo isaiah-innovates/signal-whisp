@@ -65,17 +65,21 @@ for it.
    independently labeled `discard` as off-mission, suggesting Decide is
    where that scope gap naturally gets enforced.
 8. **Build the Decide-stage classification agent** (`agents/decide_agent.py`)
-   — NOT STARTED, now unblocked. Per the file's updated "Definition of
-   done," this likely needs an LLM-as-judge approach (like
-   `discover_agent.py`'s tier classification) rather than a pure formula,
-   since a clean threshold rule didn't fall out of the real labels.
+   — DONE, eval-passing, 2026-07-22. LLM-as-judge (not a formula — see
+   below for why), scored 19/21 (90.5%) on `evals/run_decide_eval.py`
+   after two tuning passes (71.4% → 85.7% → 90.5%). Both remaining
+   mismatches are genuine boundary calls: the documented "timing" outlier
+   with no textual basis (permanent, accepted limitation), and one
+   defensible close-call disagreement using the same rule that fixed
+   three other rows. Off-mission scope pruning held correctly across all
+   three eval runs.
 9. **Railway deployment (Postgres + scheduled worker + web service)** — NOT
-   STARTED. Per user decision on 2026-07-22: deploy once after Decide is
-   eval-passing, not now — nothing currently runs on a schedule (confirmed
-   by inspection: no cron/GitHub Actions/Railway config exists;
+   STARTED, now unblocked (Decide is eval-passing). Per user decision on
+   2026-07-22: nothing currently runs on a schedule (confirmed by
+   inspection: no cron/GitHub Actions/Railway config exists;
    `run_pipeline.py`'s "daily" naming describes intent, not an actual
-   schedule), so there's no cost to sequencing Decide first and deploying
-   once.
+   schedule), so there was no cost to sequencing Decide first — this is
+   the next real step.
 
 ## What exists right now
 
@@ -116,11 +120,20 @@ for it.
   filters as GET params. No database — reads the JSONL files directly, per
   CLAUDE.md's stack conventions (Postgres arrives at Railway deployment,
   not before). Run with `uvicorn web.app:app --reload` from the repo root.
+- `agents/decide_agent.py` — Decide-stage classification. One `ScoredCluster`
+  in, `DecideResult` out (`decide_action`, `rationale`). Forced tool use,
+  LLM-as-judge (not a formula — see "Decide-stage design" below), passing
+  its eval at 19/21 (90.5%).
+- `evals/run_decide_eval.py` — scores `decide_agent.py:classify_cluster`
+  against `evals/decide-classification.md`. Reconstructs each row's exact
+  `ScoredCluster` from the already-persisted `data/runs/<run_id>/clusters.jsonl`
+  rather than re-running Sense/Discover, so the only variance in this eval
+  is the Decide agent's own classification.
 - `evals/decide-classification.md` — Decide-stage ground truth, DONE. 21
   real clusters (from `data/runs/2026-07-22/clusters.jsonl`), each hand-labeled
   `pursue`/`watch`/`discard` with written rationale (4/9/8 split). Read
-  this file's "Patterns observed" section before building `decide_agent.py`
-  — a pure score-threshold rubric didn't hold, so the agent likely needs
+  this file's "Patterns observed" section before touching `decide_agent.py`
+  — a pure score-threshold rubric didn't hold, which is why the agent is
   LLM-as-judge, not a formula.
 - `evals/signal-extraction.md` — Sense-stage ground truth, real hand-labeled
   rows, passing.
@@ -251,6 +264,60 @@ and the `compute_*` functions):
   performing acceptably (MAE ~0.05-0.09) — not touched by the checklist
   refactor, no known issue.
 
+## Decide-stage design — how we got here (read before touching decide_agent.py)
+
+`agents/decide_agent.py` classifies a `ScoredCluster` into
+`pursue`/`watch`/`discard`. Unlike Discover-stage's `overall_rank_score`,
+this was never attempted as a formula — the hand-labeling itself showed a
+pure score-threshold rule doesn't hold (see
+`evals/decide-classification.md`'s "Patterns observed": the floor-scoring
+group split evenly between `watch` and `discard` on a durability judgment
+no numeric field encodes). So this went straight to LLM-as-judge, prompted
+with the real patterns found in the 21 labeled rows.
+
+Tuning history against `evals/run_decide_eval.py`:
+
+1. First version: off-mission scope check, a "durable dead-end feasibility
+   tier -> discard" rule, and a loosely-worded "weigh the profile
+   holistically" step for everything else. **71.4% (15/21).**
+2. Diagnosed two real bugs from the mismatches: (a) the off-mission check's
+   examples (backup/DR, VPN, DB backup) were generalizing too broadly,
+   misclassifying an Apache traffic-visibility gap as off-mission when the
+   human hadn't flagged it that way at all; (b) the model was collapsing
+   `watch` into `discard` whenever either `small_team_feasibility` or
+   `willingness_to_pay_signal` alone looked weak, when the real pattern was
+   that discard requires **both** to be weak (or an explicit override).
+   Narrowed the off-mission examples and replaced the holistic step with an
+   explicit both-weak-required rule, plus real contrastive examples for
+   each. **85.7% (18/21)**, fixing all three `watch`->`discard` bugs.
+3. That fix introduced one new regression: a cluster with
+   `requires_platform_vendor_code_fix`/`faint_market_touchpoint` (both
+   weak) got discarded, when the human said `watch` because this tier's
+   own definition already grants a partial-workaround path — the new
+   both-weak rule didn't know to exempt tiers that carry that built-in
+   allowance. Added an explicit exception for
+   `requires_platform_vendor_code_fix` and
+   `requires_real_incident_engagements_to_validate`. **90.5% (19/21)**,
+   no further regressions.
+
+**Remaining 2 mismatches, both read as acceptable:**
+
+- One cluster was hand-labeled `watch` purely on a "not the right timing"
+  judgment with zero textual basis in the cluster's own data — not
+  learnable from `ScoredCluster`, called out as a permanent, accepted
+  limitation in the agent's own docstring rather than something to keep
+  chasing.
+- One cluster (strong `buildable_as_independent_tool` feasibility, dampened
+  `willingness_to_pay_signal` from incumbent competition) is a genuinely
+  close boundary call — the model's reasoning is internally consistent
+  with the same rule that correctly fixed three *other* rows, it just
+  lands on the more conservative side here. Read as a defensible
+  disagreement, not a bug.
+
+Same caveat as Discover-stage scoring: only 21 rows from one pipeline run,
+no held-out set. A second real pipeline run's output, hand-labeled fresh,
+would be a much better test than anything done against these same 21 rows.
+
 ## Documentation written alongside the build
 
 `docs/blogs/` — five drafts, not yet finalized for publishing:
@@ -285,15 +352,20 @@ decision for the user, not a task in progress.
 
 ## Where to pick this up
 
-**Immediate next step (as of 2026-07-22):** build
-`agents/decide_agent.py` against `evals/decide-classification.md`, now
-that all 21 rows are hand-labeled. Read the file's "Patterns observed"
-section first — the labeling showed a pure score-threshold rubric doesn't
-cleanly separate `watch` from `discard` at the feasibility floor, so this
-probably needs an LLM-as-judge design (tiers/rationale-aware, like
-`discover_agent.py`'s feasibility/willingness classification) rather than
-a formula like `compute_overall_rank_score`. Railway deployment (build
-order step 9) still waits on this agent passing its eval.
+**Immediate next step (as of 2026-07-22):** Railway deployment (build order
+step 9) — Sense, Discover, and Decide are all eval-passing now, and nothing
+currently runs on a schedule, so this is the first real gap left. Read
+`docs/architecture.md`'s "Deployment target" section before starting.
+
+If Decide-stage classification itself gets revisited: read
+`evals/decide-classification.md`'s "Patterns observed" section and
+`docs/progress.md`'s "Decide-stage design" section above first — a pure
+score-threshold rubric doesn't cleanly separate `watch` from `discard`, so
+`decide_agent.py` is LLM-as-judge, currently 19/21 (90.5%) with two
+accepted, non-bug mismatches. The real open gap is the lack of a held-out
+set (same as Discover) — a second real pipeline run's output, hand-labeled
+fresh, would be the actual next test, not more tuning against these same
+21 rows.
 
 For the Discover-stage scoring work (lower priority right now, not
 blocking): read `evals/opportunity-scoring.md`'s status paragraph and

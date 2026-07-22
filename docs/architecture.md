@@ -13,9 +13,10 @@
    an explicit rubric. Spec: `evals/opportunity-scoring.md`.
 4. **Decide (classify)** — take a scored opportunity and classify it into an
    action bucket a PM would actually act on: pursue, watch, or discard.
-   Spec: `evals/decide-classification.md` (skeleton — no hand-labeled rows
-   yet, added 2026-07-22). Not yet built (`agents/decide_agent.py` doesn't
-   exist).
+   Spec: `evals/decide-classification.md`. LLM-as-judge
+   (`agents/decide_agent.py`), not a formula — hand-labeling showed no
+   clean score-threshold rule separates the three buckets. Eval-passing
+   at 19/21 (90.5%).
 5. **Deliver** — ranked daily digest + an on-demand query interface over
    stored history.
 
@@ -30,7 +31,7 @@ rest as an honest, stated roadmap rather than pretending they're built.
 |---|---|---|
 | Sense | Ingestion + pain-signal extraction agent | v1 |
 | Discover | Clustering + opportunity scoring agent | v1 |
-| Decide | Pursue/watch/discard classification agent | eval skeleton only — no agent yet |
+| Decide | Pursue/watch/discard classification agent | v1, eval-passing (19/21) |
 | Build / Ship / Measure / Amplify | Would need real product data this project doesn't have | roadmap only |
 
 ## Shared post record
@@ -58,8 +59,9 @@ shape used by every source client):
 /evals/
   signal-extraction.md          # Eval Set 1 — spec for the Sense agent
   opportunity-scoring.md        # Eval Set 2 — spec for the Discover agent
-  decide-classification.md      # Eval Set 3 — spec for the Decide agent (skeleton, no rows yet)
+  decide-classification.md      # Eval Set 3 — spec for the Decide agent
   run_evals.py                  # scores agents against their eval file
+  run_decide_eval.py            # scores decide_agent.py against Eval Set 3
 /sources/
   stackexchange_client.py       # primary live source
   hn_client.py                  # secondary live source
@@ -68,7 +70,7 @@ shape used by every source client):
 /agents/
   sense_agent.py                # extraction — named to match the 7-stage model
   discover_agent.py             # clustering + scoring
-  decide_agent.py                # pursue/watch/discard classification (not yet built)
+  decide_agent.py               # pursue/watch/discard classification
 /data/runs/YYYY-MM-DD/          # raw posts, signals, scored clusters (JSONL) — gitignored
 /reports/                       # generated daily digests — gitignored, not committed
 /web/                           # query API + minimal dashboard

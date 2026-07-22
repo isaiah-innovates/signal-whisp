@@ -61,16 +61,16 @@ flowchart TD
     EVAL2["evals/opportunity-scoring.md<br/>hand-labeled ground truth"]
     EVAL2 -.eval gate.-> SCORE
 
-    SCORE -.not wired yet.-> DECIDE
+    SCORE -.not wired into run_pipeline.py yet.-> DECIDE
 
-    subgraph DecideStage["4. Decide (not yet built)"]
-        DECIDE["agents/decide_agent.py<br/><i>pursue / watch / discard</i>"]
+    subgraph DecideStage["4. Decide"]
+        DECIDE["agents/decide_agent.py<br/><i>pursue / watch / discard</i><br/>LLM-as-judge, not a formula"]
     end
 
-    EVAL3["evals/decide-classification.md<br/>skeleton — no hand-labeled rows yet"]
+    EVAL3["evals/decide-classification.md<br/>hand-labeled ground truth"]
     EVAL3 -.eval gate.-> DECIDE
 
-    DECIDE -.not wired yet.-> DELIVER
+    DECIDE -.not wired into run_pipeline.py yet.-> DELIVER
     SCORE --> DELIVER
 
     subgraph DeliverStage["5. Deliver"]
@@ -84,7 +84,6 @@ flowchart TD
     style EVAL1 fill:#2d2d2d,stroke:#888,color:#fff,stroke-dasharray: 4 3
     style EVAL2 fill:#2d2d2d,stroke:#888,color:#fff,stroke-dasharray: 4 3
     style EVAL3 fill:#2d2d2d,stroke:#888,color:#fff,stroke-dasharray: 4 3
-    style DECIDE stroke-dasharray: 3 3
 ```
 
 Each LLM stage is gated by its own eval file — the dashed lines above. No
@@ -97,7 +96,7 @@ against first.
 |---|---|---|
 | Sense | Ingestion + pain-signal extraction agent | v1, eval-passing |
 | Discover | Clustering + opportunity scoring agent | v1, accepted with known gaps |
-| Decide | Pursue/watch/discard classification agent | eval skeleton only (`evals/decide-classification.md`) — no agent yet |
+| Decide | Pursue/watch/discard classification agent | v1, eval-passing (19/21) |
 | Build / Ship / Measure / Amplify | Would need real product data this project doesn't have | roadmap only |
 
 The full Falkster fleet assumes enterprise data this project doesn't have
@@ -137,6 +136,22 @@ calibration history): only 16 hand-labeled clusters exist and every pass so
 far has been validated against that same set, with no held-out test data
 yet.
 
+**Decide-stage** (`evals/decide-classification.md`,
+`evals/run_decide_eval.py`):
+
+| Metric | Result |
+|---|---|
+| `decide_action` exact-match agreement | 19/21 (90.5%) |
+| Off-mission scope pruning | correct in all 3 eval runs |
+
+LLM-as-judge, not a formula — hand-labeling showed no clean score-threshold
+rule separates `pursue`/`watch`/`discard`. Both remaining mismatches are
+genuine boundary calls: one hand-label reflects a pure "timing" judgment
+with no textual basis anywhere in the score profile (a permanent, accepted
+limitation); the other is a defensible close call using the same rule that
+correctly resolved three other rows. Same caveat as Discover-stage: only 21
+rows from one pipeline run, no held-out set.
+
 ## Repo structure
 
 ```
@@ -144,8 +159,10 @@ yet.
 /evals/
   signal-extraction.md          # Eval Set 1 — Sense-stage ground truth
   opportunity-scoring.md        # Eval Set 2 — Discover-stage ground truth
+  decide-classification.md      # Eval Set 3 — Decide-stage ground truth
   run_evals.py                  # scores sense_agent.py against Eval Set 1
   run_discover_scoring_eval.py  # scores discover_agent.py against Eval Set 2
+  run_decide_eval.py            # scores decide_agent.py against Eval Set 3
 /sources/
   stackexchange_client.py       # primary live source
   hn_client.py                  # secondary live source
@@ -154,7 +171,9 @@ yet.
 /agents/
   sense_agent.py                # Sense-stage extraction
   discover_agent.py              # Discover-stage clustering + scoring
+  decide_agent.py                # Decide-stage pursue/watch/discard classification
   run_pipeline.py                # full daily run: ingest -> Sense -> Discover -> digest
+                                 # (Decide not yet wired into this — see "what's not built yet")
 /data/runs/YYYY-MM-DD/          # raw posts, signals, scored clusters (JSONL) — gitignored
 /reports/                       # generated daily digests — gitignored, not committed
 /web/
@@ -196,20 +215,19 @@ minimum `overall_rank_score`, or keyword), or query `GET /api/clusters` /
 
 ## What's not built yet
 
-- **Decide-stage agent** (`agents/decide_agent.py`) — next up. The eval file
-  (`evals/decide-classification.md`) is scaffolded with a target schema, a
-  draft rubric, and 21 real candidate rows pulled from an actual pipeline
-  run, but every `decide_action` is still a `PENDING` placeholder — no
-  hand-labeling done yet, so no agent code gets written per the project's
-  eval-first discipline.
-- **A held-out eval set** — all Discover-stage calibration has been checked
-  against the same 16 hand-labeled clusters it was tuned on.
-- **Cybersecurity-vs-general-ops scope filtering** — the eval file's human
-  labeler prunes off-mission ops/reliability clusters (e.g. backup tooling,
-  VPN architecture) by hand; the live pipeline has no equivalent filter, so
-  those clusters do appear in real digests. Documented as a known,
-  deliberately-accepted gap in `docs/progress.md` — possibly something
-  Decide-stage classification ends up enforcing instead.
+- **Decide wired into the pipeline** — `agents/decide_agent.py` is built and
+  eval-passing (19/21), but `agents/run_pipeline.py`'s digest doesn't call
+  it yet; the digest still ranks purely by `overall_rank_score` without a
+  pursue/watch/discard label attached.
+- **A held-out eval set** — all Discover-stage and Decide-stage calibration
+  has been checked against the same small hand-labeled set each was tuned
+  on (16 and 21 rows respectively, both from a single pipeline run).
+- **Cybersecurity-vs-general-ops scope filtering at the Sense/Discover
+  level** — the off-mission ops/reliability clusters (backup tooling, VPN
+  architecture) still pass through Sense and Discover unfiltered; Decide
+  does correctly catch and discard them, but only after they've already
+  been scored, clustered, and would appear in the digest if Decide isn't
+  in the loop yet (see the point above).
 - **Railway deployment** — hosting the existing `web/` app on Railway with a
   managed Postgres backend and a scheduled worker running the pipeline
   daily; not started, and deliberately sequenced after Decide lands rather
