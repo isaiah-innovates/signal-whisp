@@ -1,0 +1,13 @@
+# Your eval file can be your database
+
+I never built a database for my eval ground truth. The eval file already had headers, a rubric, and a place to put rows — so I just put the rows there.
+
+Concretely: `evals/signal-extraction.md` and `evals/opportunity-scoring.md` aren't specs that point at a separate labels file. They *are* the labels file. Each one has a rubric section explaining what each column means and how it's supposed to be scored, followed by a plain markdown table of real, hand-labeled examples — permalinks, extracted fields, scores, and my written reasoning, all in the same document, in the same commit history as the rubric it's testing against.
+
+The eval runner script parses that table directly out of the markdown file at run time. No JSON export, no CSV, no separate schema to keep in sync. When I hand-label a new row, I'm editing a markdown table in a text editor — the exact same file a human would read to understand what "good" looks like for this stage of the pipeline.
+
+Three things fall out of that for free. First, the rubric and the ground truth can't drift apart, because there's no second file for them to drift from — if I change what a column means, the rows right below it are staring at me in the same diff. Second, there's no separate "here's how to read the eval" documentation to keep updated, because reading the file top to bottom already explains both the why (the rubric, the method column) and the what (real examples) in one pass. Third, git already gives me a full audit trail of every label I've ever added or corrected, for free, because the labels were never anywhere except version control to begin with.
+
+It's not free of cost. A hand-rolled markdown-table parser is more fragile than a real serialization format — I hit a bug where a stray blank line landed inside a table and silently broke the row count, and cell-splitting on `|` gets genuinely awkward once a cell itself contains a markdown link with pipes hiding inside the URL. At real scale — hundreds of rows, multiple people labeling concurrently — this pattern would need to graduate into something more structured. For the actual size I'm at (dozens of hand-labeled rows, one labeler), reaching for a database would have been solving a problem I don't have yet.
+
+Same instinct as not standing up Postgres before you've earned a Postgres-shaped problem: the amount of infrastructure a project deserves is set by its actual current scale, not the scale it might someday reach. A markdown table you already had to write anyway is a perfectly good database, right up until the day it isn't.

@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Signal — opportunity query</title>
+<style>
+  :root {
+    --bg: #f7f6f3;
+    --surface: #ffffff;
+    --border: #dedad2;
+    --text: #201d17;
+    --text-muted: #6b665c;
+    --accent: #8a4b2e;
+    --accent-weak: #f1e3d8;
+    --score-high: #2f6b4f;
+    --score-mid: #8a6d1f;
+    --score-low: #8a4b2e;
+    --draft: #a35d2f;
+    --focus: #1c6fd6;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16140f;
+      --surface: #201d17;
+      --border: #3a352b;
+      --text: #ece7dc;
+      --text-muted: #a49c8c;
+      --accent: #e2a374;
+      --accent-weak: #362b20;
+      --score-high: #7fbf9e;
+      --score-mid: #d9b95c;
+      --score-low: #e2a374;
+      --draft: #e2a374;
+      --focus: #6fb3ff;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #16140f;
+    --surface: #201d17;
+    --border: #3a352b;
+    --text: #ece7dc;
+    --text-muted: #a49c8c;
+    --accent: #e2a374;
+    --accent-weak: #362b20;
+    --score-high: #7fbf9e;
+    --score-mid: #d9b95c;
+    --score-low: #e2a374;
+    --draft: #e2a374;
+    --focus: #6fb3ff;
+  }
+  :root[data-theme="light"] {
+    --bg: #f7f6f3;
+    --surface: #ffffff;
+    --border: #dedad2;
+    --text: #201d17;
+    --text-muted: #6b665c;
+    --accent: #8a4b2e;
+    --accent-weak: #f1e3d8;
+    --score-high: #2f6b4f;
+    --score-mid: #8a6d1f;
+    --score-low: #8a4b2e;
+    --draft: #a35d2f;
+    --focus: #1c6fd6;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", "Inter", system-ui, sans-serif;
+    line-height: 1.45;
+  }
+
+  header {
+    padding: 2rem 2rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  header h1 {
+    margin: 0 0 0.2rem;
+    font-size: 1.5rem;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+
+  header p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.92rem;
+  }
+
+  main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 1.5rem 2rem 3rem;
+  }
+
+  form.filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: end;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  form.filters .field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  form.filters label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+  }
+
+  form.filters input {
+    font: inherit;
+    font-size: 0.9rem;
+    padding: 0.4rem 0.55rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--text);
+    min-width: 9rem;
+  }
+
+  form.filters input:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 1px;
+  }
+
+  form.filters input[name="q"] { min-width: 16rem; }
+
+  form.filters button {
+    font: inherit;
+    font-size: 0.88rem;
+    font-weight: 600;
+    padding: 0.45rem 1rem;
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    background: var(--accent);
+    color: var(--surface);
+    cursor: pointer;
+  }
+
+  form.filters button:hover { opacity: 0.9; }
+
+  form.filters a.reset {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    text-decoration: none;
+    align-self: center;
+  }
+  form.filters a.reset:hover { color: var(--text); text-decoration: underline; }
+
+  .summary {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin: 0 0 1rem;
+  }
+
+  .cluster-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+  }
+
+  .cluster {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.15rem;
+  }
+
+  .cluster-head {
+    display: flex;
+    gap: 0.9rem;
+    align-items: baseline;
+  }
+
+  .score-chip {
+    flex: none;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    font-size: 0.95rem;
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    background: var(--accent-weak);
+    color: var(--score-mid);
+  }
+  .score-chip[data-tier="high"] { color: var(--score-high); }
+  .score-chip[data-tier="mid"] { color: var(--score-mid); }
+  .score-chip[data-tier="low"] { color: var(--score-low); }
+
+  .opportunity {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    text-wrap: balance;
+  }
+
+  .meta-line {
+    margin: 0.35rem 0 0.6rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+  .meta-line .run-id { font-variant-numeric: tabular-nums; }
+
+  .subscores {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.9rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-bottom: 0.55rem;
+  }
+  .subscores .val { font-variant-numeric: tabular-nums; color: var(--text); font-weight: 600; }
+  .subscores .draft { color: var(--draft); }
+
+  details.rationale summary {
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: var(--accent);
+  }
+  details.rationale p {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin: 0.5rem 0 0;
+  }
+
+  .signals {
+    margin-top: 0.6rem;
+    font-size: 0.78rem;
+  }
+  .signals a {
+    color: var(--focus);
+    text-decoration: none;
+    word-break: break-all;
+  }
+  .signals a:hover { text-decoration: underline; }
+
+  .empty {
+    padding: 3rem 1rem;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+  }
+
+  footer {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 2rem 2rem;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+  footer code {
+    background: var(--accent-weak);
+    padding: 0.1rem 0.3rem;
+    border-radius: 4px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Signal — opportunity query</h1>
+  <p>Ranked, filterable view over every Discover-stage run in <code>data/runs/</code>.</p>
+</header>
+
+<main>
+  <form class="filters" method="get" action="/">
+    <div class="field">
+      <label for="date_from">From</label>
+      <input id="date_from" type="date" name="date_from" value="{{ filters.date_from }}">
+    </div>
+    <div class="field">
+      <label for="date_to">To</label>
+      <input id="date_to" type="date" name="date_to" value="{{ filters.date_to }}">
+    </div>
+    <div class="field">
+      <label for="min_score">Min score</label>
+      <input id="min_score" type="number" name="min_score" step="0.05" min="0" max="1" value="{{ filters.min_score }}">
+    </div>
+    <div class="field">
+      <label for="q">Search</label>
+      <input id="q" type="text" name="q" placeholder="opportunity or rationale text" value="{{ filters.q }}">
+    </div>
+    <button type="submit">Filter</button>
+    <a class="reset" href="/">Reset</a>
+  </form>
+
+  <p class="summary">
+    {{ clusters|length }} matching cluster{{ 's' if clusters|length != 1 else '' }}
+    out of {{ total_all_time }} total, across {{ run_count }} run{{ 's' if run_count != 1 else '' }}.
+    JSON: <code>/api/clusters</code>
+  </p>
+
+  {% if clusters %}
+  <div class="cluster-list">
+    {% for r in clusters %}
+    {% set c = r.cluster %}
+    <article class="cluster">
+      <div class="cluster-head">
+        <span class="score-chip" data-tier="{{ 'high' if c.overall_rank_score >= 0.6 else ('mid' if c.overall_rank_score >= 0.3 else 'low') }}">{{ "%.2f"|format(c.overall_rank_score) }}</span>
+        <p class="opportunity">{{ c.opportunity_statement }}</p>
+      </div>
+      <p class="meta-line">
+        run <span class="run-id">{{ r.run_id }}</span> · {{ c.signal_ids|length }} signal{{ 's' if c.signal_ids|length != 1 else '' }} · {{ c.cluster_id }}
+      </p>
+      <div class="subscores">
+        <span>validity <span class="val">{{ "%.2f"|format(c.signal_validity) }}</span></span>
+        <span>extraction <span class="val">{{ "%.2f"|format(c.extraction_accuracy) }}</span></span>
+        <span>corroboration <span class="val">{{ "%.2f"|format(c.frequency_corroboration) }}</span></span>
+        <span>feasibility <span class="val">{{ "%.2f"|format(c.small_team_feasibility) }}</span></span>
+        <span>willingness&nbsp;to&nbsp;pay <span class="val">{{ "%.2f"|format(c.willingness_to_pay_signal) }}</span></span>
+        <span>novelty <span class="val draft">{{ "%.2f"|format(c.novelty) }} (draft)</span></span>
+      </div>
+      <details class="rationale">
+        <summary>Rationale</summary>
+        <p>{{ c.rationale }}</p>
+      </details>
+      <div class="signals">
+        {% for sid in c.signal_ids %}<div><a href="{{ sid }}" target="_blank" rel="noopener">{{ sid }}</a></div>{% endfor %}
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty">No clusters match these filters yet.</div>
+  {% endif %}
+</main>
+
+<footer>
+  <code>novelty</code> is DRAFT/human-review-only per <code>evals/opportunity-scoring.md</code>'s rubric — never treat it as final.
+  <code>overall_rank_score</code> is a calibrated-but-unproven formula; see <code>docs/progress.md</code>'s "Scoring design" section for current accuracy and known gaps.
+</footer>
+
+</body>
+</html>
