@@ -10,9 +10,13 @@
    extract it into structured fields. Spec: `evals/signal-extraction.md`.
 3. **Discover (cluster & score)** — group related signals across posts,
    sources, and days into candidate "opportunities," then score each against
-   an explicit rubric. Spec: `evals/opportunity-scoring.md` (to be written
-   after Sense is passing).
-4. **Deliver** — ranked daily digest + an on-demand query interface over
+   an explicit rubric. Spec: `evals/opportunity-scoring.md`.
+4. **Decide (classify)** — take a scored opportunity and classify it into an
+   action bucket a PM would actually act on: pursue, watch, or discard.
+   Spec: `evals/decide-classification.md` (skeleton — no hand-labeled rows
+   yet, added 2026-07-22). Not yet built (`agents/decide_agent.py` doesn't
+   exist).
+5. **Deliver** — ranked daily digest + an on-demand query interface over
    stored history.
 
 ## Falkster PM Operating System mapping
@@ -26,7 +30,7 @@ rest as an honest, stated roadmap rather than pretending they're built.
 |---|---|---|
 | Sense | Ingestion + pain-signal extraction agent | v1 |
 | Discover | Clustering + opportunity scoring agent | v1 |
-| Decide | Ranked digest is a decision input, not an automated decision | partial |
+| Decide | Pursue/watch/discard classification agent | eval skeleton only — no agent yet |
 | Build / Ship / Measure / Amplify | Would need real product data this project doesn't have | roadmap only |
 
 ## Shared post record
@@ -54,6 +58,7 @@ shape used by every source client):
 /evals/
   signal-extraction.md          # Eval Set 1 — spec for the Sense agent
   opportunity-scoring.md        # Eval Set 2 — spec for the Discover agent
+  decide-classification.md      # Eval Set 3 — spec for the Decide agent (skeleton, no rows yet)
   run_evals.py                  # scores agents against their eval file
 /sources/
   stackexchange_client.py       # primary live source
@@ -63,6 +68,7 @@ shape used by every source client):
 /agents/
   sense_agent.py                # extraction — named to match the 7-stage model
   discover_agent.py             # clustering + scoring
+  decide_agent.py                # pursue/watch/discard classification (not yet built)
 /data/runs/YYYY-MM-DD/          # raw posts, signals, scored clusters (JSONL) — gitignored
 /reports/                       # generated daily digests — gitignored, not committed
 /web/                           # query API + minimal dashboard

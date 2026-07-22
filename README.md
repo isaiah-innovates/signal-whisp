@@ -61,9 +61,19 @@ flowchart TD
     EVAL2["evals/opportunity-scoring.md<br/>hand-labeled ground truth"]
     EVAL2 -.eval gate.-> SCORE
 
+    SCORE -.not wired yet.-> DECIDE
+
+    subgraph DecideStage["4. Decide (not yet built)"]
+        DECIDE["agents/decide_agent.py<br/><i>pursue / watch / discard</i>"]
+    end
+
+    EVAL3["evals/decide-classification.md<br/>skeleton — no hand-labeled rows yet"]
+    EVAL3 -.eval gate.-> DECIDE
+
+    DECIDE -.not wired yet.-> DELIVER
     SCORE --> DELIVER
 
-    subgraph DeliverStage["4. Deliver"]
+    subgraph DeliverStage["5. Deliver"]
         DELIVER["agents/run_pipeline.py<br/>rank + render digest"]
     end
 
@@ -73,6 +83,8 @@ flowchart TD
 
     style EVAL1 fill:#2d2d2d,stroke:#888,color:#fff,stroke-dasharray: 4 3
     style EVAL2 fill:#2d2d2d,stroke:#888,color:#fff,stroke-dasharray: 4 3
+    style EVAL3 fill:#2d2d2d,stroke:#888,color:#fff,stroke-dasharray: 4 3
+    style DECIDE stroke-dasharray: 3 3
 ```
 
 Each LLM stage is gated by its own eval file — the dashed lines above. No
@@ -85,7 +97,7 @@ against first.
 |---|---|---|
 | Sense | Ingestion + pain-signal extraction agent | v1, eval-passing |
 | Discover | Clustering + opportunity scoring agent | v1, accepted with known gaps |
-| Decide | Ranked digest is a decision input, not an automated decision | partial |
+| Decide | Pursue/watch/discard classification agent | eval skeleton only (`evals/decide-classification.md`) — no agent yet |
 | Build / Ship / Measure / Amplify | Would need real product data this project doesn't have | roadmap only |
 
 The full Falkster fleet assumes enterprise data this project doesn't have
@@ -184,17 +196,26 @@ minimum `overall_rank_score`, or keyword), or query `GET /api/clusters` /
 
 ## What's not built yet
 
+- **Decide-stage agent** (`agents/decide_agent.py`) — next up. The eval file
+  (`evals/decide-classification.md`) is scaffolded with a target schema, a
+  draft rubric, and 21 real candidate rows pulled from an actual pipeline
+  run, but every `decide_action` is still a `PENDING` placeholder — no
+  hand-labeling done yet, so no agent code gets written per the project's
+  eval-first discipline.
 - **A held-out eval set** — all Discover-stage calibration has been checked
   against the same 16 hand-labeled clusters it was tuned on.
 - **Cybersecurity-vs-general-ops scope filtering** — the eval file's human
   labeler prunes off-mission ops/reliability clusters (e.g. backup tooling,
   VPN architecture) by hand; the live pipeline has no equivalent filter, so
   those clusters do appear in real digests. Documented as a known,
-  deliberately-accepted gap in `docs/progress.md`.
+  deliberately-accepted gap in `docs/progress.md` — possibly something
+  Decide-stage classification ends up enforcing instead.
 - **Railway deployment** — hosting the existing `web/` app on Railway with a
   managed Postgres backend and a scheduled worker running the pipeline
-  daily; not started. Local JSONL storage is the intended stopgap until
-  then, per project convention.
+  daily; not started, and deliberately sequenced after Decide lands rather
+  than before (nothing runs on a schedule today, so there's no cost to
+  waiting — see `docs/progress.md`). Local JSONL storage is the intended
+  stopgap until then, per project convention.
 
 See `docs/progress.md` for the full status snapshot and calibration history,
 and `docs/architecture.md` / `docs/data-sources.md` for the underlying design

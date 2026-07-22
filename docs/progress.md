@@ -49,7 +49,24 @@ for it.
    empty-results state all render correctly. Also smoke-tested with a live
    `uvicorn` process on port 8420. Not visually eyeballed in a browser this
    session (no browser tool available) — only checked programmatically.
-7. **Railway deployment (Postgres + scheduled worker + web service)** — NOT STARTED.
+7. **Hand-label `evals/decide-classification.md`** — SKELETON ONLY, started
+   2026-07-22. Target schema and a draft rubric (score-threshold/floor
+   based, per user decision) are written; all 21 candidate rows are real
+   `ScoredCluster` output from the 2026-07-22 pipeline run, but every
+   `decide_action`/`rationale` is a `PENDING` placeholder — no hand-labeling
+   done yet. Three open questions for the labeler are called out in the
+   file itself (single-signal-but-high-score handling, whether a hard
+   score floor should force `discard` independent of other fields, and
+   whether `novelty` should factor in at all given it's DRAFT-only).
+8. **Build the Decide-stage classification agent** (`agents/decide_agent.py`)
+   — NOT STARTED. Blocked on step 7 per stage discipline.
+9. **Railway deployment (Postgres + scheduled worker + web service)** — NOT
+   STARTED. Per user decision on 2026-07-22: deploy once after Decide is
+   eval-passing, not now — nothing currently runs on a schedule (confirmed
+   by inspection: no cron/GitHub Actions/Railway config exists;
+   `run_pipeline.py`'s "daily" naming describes intent, not an actual
+   schedule), so there's no cost to sequencing Decide first and deploying
+   once.
 
 ## What exists right now
 
@@ -90,6 +107,11 @@ for it.
   filters as GET params. No database — reads the JSONL files directly, per
   CLAUDE.md's stack conventions (Postgres arrives at Railway deployment,
   not before). Run with `uvicorn web.app:app --reload` from the repo root.
+- `evals/decide-classification.md` — Decide-stage eval, SKELETON. Target
+  schema + draft rubric written; 21 real candidate rows pulled from
+  `data/runs/2026-07-22/clusters.jsonl`; `decide_action`/`rationale` all
+  PENDING (no hand-labeling done). Read this file's rubric section and
+  open questions before hand-labeling or building `decide_agent.py`.
 - `evals/signal-extraction.md` — Sense-stage ground truth, real hand-labeled
   rows, passing.
 - `evals/opportunity-scoring.md` — Discover-stage ground truth. 16 real
@@ -253,9 +275,19 @@ decision for the user, not a task in progress.
 
 ## Where to pick this up
 
-Read this file, then `evals/opportunity-scoring.md`'s status paragraph and
-"## Rows" section for the ground truth itself, then
-`agents/discover_agent.py`'s module docstring and `SCORING_SYSTEM_PROMPT`
-for the current scoring design, before touching any scoring logic. Ask
-before assuming which open question to tackle first — none has been
-decided yet.
+**Immediate next step (as of 2026-07-22):** hand-label
+`evals/decide-classification.md` — it's a skeleton with 21 real candidate
+rows and no ground truth yet. Per stage discipline, `agents/decide_agent.py`
+doesn't get built until that's done, and Railway deployment (build order
+step 9) waits on the agent passing its eval.
+
+For the Decide stage: read `evals/decide-classification.md` in full first
+(rubric + the three open questions it names), then hand-label rows before
+writing any agent code.
+
+For the Discover-stage scoring work (lower priority right now, not
+blocking): read `evals/opportunity-scoring.md`'s status paragraph and
+"## Rows" section for the ground truth, then `agents/discover_agent.py`'s
+module docstring and `SCORING_SYSTEM_PROMPT` for the current scoring
+design, before touching any scoring logic. Ask before assuming which open
+question to tackle first — none has been decided yet.

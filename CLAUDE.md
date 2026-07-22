@@ -4,8 +4,9 @@
 A small, rigorously-evaluated pipeline that turns public cybersecurity-practitioner
 complaints into scored, ranked market-opportunity candidates for a small team.
 Built as a scoped-down, extensible slice of the Falkster 7-stage PM Operating
-System (falkster.com/handbook/ai-agent-army) — Sense and Discover stages only.
-See `docs/architecture.md` for the full pipeline design.
+System (falkster.com/handbook/ai-agent-army) — Sense, Discover, and (as of
+2026-07-22) Decide stages. See `docs/architecture.md` for the full pipeline
+design.
 
 This is a portfolio project. The centerpiece is not the data pipeline — it's a
 genuinely rigorous, two-stage eval framework built *before* the pipeline logic,
@@ -25,8 +26,11 @@ in the "eval is the spec" discipline (falkster.com/handbook/the-eval-is-the-spec
    rows yourself and treat them as ground truth.
 3. **Stage discipline.** Don't start Discover-stage (clustering/scoring) work
    until Sense-stage (extraction) is passing its eval bar defined in
-   `evals/signal-extraction.md`. Don't build delivery/deployment until both
-   agent stages are eval-passing.
+   `evals/signal-extraction.md`. Don't start Decide-stage work until
+   `evals/decide-classification.md` has real hand-labeled rows (not the
+   PENDING placeholders it currently has). Don't build Railway deployment
+   until Decide is eval-passing — per user decision on 2026-07-22, one
+   deployment after Decide lands beats deploying now and redeploying later.
 4. **Keep prompts traceable to their eval file.** If an agent's prompt changes,
    the corresponding eval file's labeling criteria should be updated first (or
    the change explained against the existing criteria), then the eval re-run
@@ -70,7 +74,13 @@ specs (auth, endpoints, rate limits, field mapping) are in `docs/data-sources.md
 4. Hand-label `evals/opportunity-scoring.md` from real extracted output.
 5. Build the Discover-stage scoring agent against that eval file.
 6. Delivery layer (digest + query interface).
-7. Railway deployment (Postgres + scheduled worker + web service).
+7. Hand-label `evals/decide-classification.md` from real Discover-stage
+   output (added 2026-07-22).
+8. Build the Decide-stage classification agent (`agents/decide_agent.py`,
+   not yet created) against that eval file.
+9. Railway deployment (Postgres + scheduled worker + web service) — build
+   and deploy once Decide is eval-passing, not before, so there's one
+   deployment instead of two.
 
 No dates attached to this — it's sequence, not a schedule.
 
