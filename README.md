@@ -191,9 +191,10 @@ minimum `overall_rank_score`, or keyword), or query `GET /api/clusters` /
   VPN architecture) by hand; the live pipeline has no equivalent filter, so
   those clusters do appear in real digests. Documented as a known,
   deliberately-accepted gap in `docs/progress.md`.
-- **Railway deployment** (Postgres, scheduled worker, web service) — not
-  started; local JSONL storage is the intended stopgap until then, per
-  project convention.
+- **Railway deployment** — hosting the existing `web/` app on Railway with a
+  managed Postgres backend and a scheduled worker running the pipeline
+  daily; not started. Local JSONL storage is the intended stopgap until
+  then, per project convention.
 
 See `docs/progress.md` for the full status snapshot and calibration history,
 and `docs/architecture.md` / `docs/data-sources.md` for the underlying design
