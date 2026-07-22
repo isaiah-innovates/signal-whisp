@@ -26,11 +26,13 @@ in the "eval is the spec" discipline (falkster.com/handbook/the-eval-is-the-spec
    rows yourself and treat them as ground truth.
 3. **Stage discipline.** Don't start Discover-stage (clustering/scoring) work
    until Sense-stage (extraction) is passing its eval bar defined in
-   `evals/signal-extraction.md`. Don't build Railway deployment until
-   Decide is eval-passing — per user decision on 2026-07-22, one
-   deployment after Decide lands beats deploying now and redeploying later.
-   (All three stages are eval-passing as of 2026-07-22 — Railway deployment
-   is the next real gap.)
+   `evals/signal-extraction.md`. All three stages (Sense, Discover, Decide)
+   are eval-passing as of 2026-07-22. **Railway deployment will not happen**
+   — per user decision on 2026-07-22, after reviewing the real cost estimate
+   (~$95-135/mo daily cadence, ~$26-42/mo weekly, plus ~$15-25/mo Railway
+   hosting regardless of cadence), there's no reason to take on the ongoing
+   cost. The project runs locally (`agents/run_pipeline.py` + `web/app.py`)
+   and that's the intended end state, not a stopgap.
 4. **Keep prompts traceable to their eval file.** If an agent's prompt changes,
    the corresponding eval file's labeling criteria should be updated first (or
    the change explained against the existing criteria), then the eval re-run
@@ -60,9 +62,10 @@ specs (auth, endpoints, rate limits, field mapping) are in `docs/data-sources.md
   prompting for raw JSON.
 - Plain `requests` for REST APIs unless a source specifically requires an SDK
   (e.g. PRAW for the dormant Reddit client).
-- Local file/JSONL storage is fine through the build-out phase. Postgres
-  arrives at the Railway deployment step, not before — don't introduce a
-  database dependency earlier than that unless asked.
+- Local file/JSONL storage is the permanent storage layer for this project
+  (see Build order step 9 below — Railway/Postgres deployment was
+  considered and explicitly declined on cost grounds). Don't introduce a
+  database dependency unless asked.
 
 ## Build order
 1. Pull real candidate posts from Stack Exchange and Hacker News (per
@@ -78,8 +81,13 @@ specs (auth, endpoints, rate limits, field mapping) are in `docs/data-sources.md
    output — DONE, 2026-07-22.
 8. Build the Decide-stage classification agent (`agents/decide_agent.py`)
    against that eval file — DONE, eval-passing at 19/21 (90.5%), 2026-07-22.
-9. Railway deployment (Postgres + scheduled worker + web service) — next up,
-   now that Decide is eval-passing.
+9. Railway deployment (Postgres + scheduled worker + web service) —
+   **decided against, 2026-07-22.** Estimated real cost (~$95-135/mo daily
+   pipeline cadence or ~$26-42/mo weekly, plus ~$15-25/mo Railway hosting
+   regardless of cadence) wasn't worth taking on. The project runs locally:
+   `agents/run_pipeline.py` for the pipeline, `web/app.py` for the
+   dashboard. This is the project's final state, not a stopgap awaiting
+   deployment.
 
 No dates attached to this — it's sequence, not a schedule.
 

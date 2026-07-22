@@ -80,13 +80,24 @@ for it.
    data: 21/21 clusters classified with no failures (4 pursue / 11 watch /
    6 discard) — output at `reports/2026-07-22.md` (overwritten) and
    `data/runs/2026-07-22/decisions.jsonl`.
-9. **Railway deployment (Postgres + scheduled worker + web service)** — NOT
-   STARTED, now unblocked (Decide is eval-passing). Per user decision on
-   2026-07-22: nothing currently runs on a schedule (confirmed by
-   inspection: no cron/GitHub Actions/Railway config exists;
-   `run_pipeline.py`'s "daily" naming describes intent, not an actual
-   schedule), so there was no cost to sequencing Decide first — this is
-   the next real step.
+9. **Railway deployment (Postgres + scheduled worker + web service)** —
+   **DECIDED AGAINST, 2026-07-22.** After Decide became eval-passing
+   (unblocking this step), estimated real cost before committing: measured
+   actual token usage from the 2026-07-22 pipeline run (186 posts -> 27
+   signals -> 21 clusters -> 21 decisions, via `count_tokens` against the
+   real system prompts and real persisted output, not guessed) put LLM
+   spend at ~$95-135/mo on a daily cadence or ~$26-42/mo weekly, plus a
+   roughly flat ~$15-25/mo for Railway hosting (Postgres + always-on web
+   service + worker) regardless of cadence. Not worth it. The project's
+   final form is local: `agents/run_pipeline.py` run by hand (or a local
+   cron/launchd job, if wanted later) and `web/app.py` run locally for the
+   dashboard. Nothing currently runs on a schedule and that's the accepted
+   end state, not a gap.
+   Separately noted while costing this out: `pull_batch()` always pulls a
+   trailing 365-day window rather than incrementally since the last run,
+   so both daily and weekly cadences would reprocess mostly-overlapping
+   posts every run — a real inefficiency if the pipeline is ever run on a
+   schedule by hand, independent of the deployment decision.
 
 ## What exists right now
 
@@ -132,9 +143,10 @@ for it.
   date-range/min-score/keyword/**decide_action** filters as GET params —
   a decide-action badge (semantic color, separate from the page's accent
   hue) and a separate rationale `<details>` block render per cluster. No
-  database — reads the JSONL files directly, per CLAUDE.md's stack
-  conventions (Postgres arrives at Railway deployment, not before). Run
-  with `uvicorn web.app:app --reload` from the repo root. Verified with
+  database — reads the JSONL files directly; local JSONL is the permanent
+  storage layer now that Railway/Postgres deployment has been decided
+  against (see build order step 9). Run with `uvicorn web.app:app --reload`
+  from the repo root. Verified with
   `TestClient` against the real 2026-07-22 data: `decide_action` filter
   correctly returns 4/11/6 for pursue/watch/discard, badges render, and
   the empty-state/combined-filter cases still work.
@@ -364,16 +376,19 @@ decision for the user, not a task in progress.
 - Finalize/merge the blog post drafts (which pieces from post 1 vs. post 2
   make the final cut) and decide on/edit posts 3-5 before anything gets
   published externally.
-- Everything downstream of scoring (delivery layer, Railway deployment) is
-  untouched and blocked on this stage being called "done" per CLAUDE.md's
-  stage discipline.
+- `pull_batch()`'s trailing-365-day, non-incremental pull (see build order
+  step 9's note) — worth fixing if the pipeline gets run on any regular
+  cadence by hand, independent of the (declined) Railway deployment.
 
 ## Where to pick this up
 
-**Immediate next step (as of 2026-07-22):** Railway deployment (build order
-step 9) — Sense, Discover, and Decide are all eval-passing now, and nothing
-currently runs on a schedule, so this is the first real gap left. Read
-`docs/architecture.md`'s "Deployment target" section before starting.
+**Status as of 2026-07-22:** all three stages (Sense, Discover, Decide) are
+eval-passing, the digest and dashboard are wired end-to-end, and Railway
+deployment (build order step 9) has been **decided against** on cost
+grounds — this project's final form runs locally. There's no single
+"immediate next step" queued; remaining open items are the blog post
+drafts, the `pull_batch()` incremental-pull fix, and the held-out-eval-set
+question, none of them blocking.
 
 If Decide-stage classification itself gets revisited: read
 `evals/decide-classification.md`'s "Patterns observed" section and

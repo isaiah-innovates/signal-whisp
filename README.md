@@ -224,12 +224,20 @@ action), or query `GET /api/clusters` / `GET /api/runs` directly.
   architecture) still pass through Sense and Discover unfiltered and get
   scored/clustered before Decide catches and discards them; the digest's
   Discard section is correct, but the earlier stages do the wasted work.
-- **Railway deployment** — hosting the existing `web/` app on Railway with a
-  managed Postgres backend and a scheduled worker running the pipeline
-  daily; not started, and deliberately sequenced after Decide lands rather
-  than before (nothing runs on a schedule today, so there's no cost to
-  waiting — see `docs/progress.md`). Local JSONL storage is the intended
-  stopgap until then, per project convention.
+
+## Deployment — decided against
+
+Railway deployment (managed Postgres, a scheduled worker, a hosted web
+service) was evaluated once all three stages were eval-passing and
+**rejected on cost grounds**: measured actual token usage from a real
+pipeline run put ongoing LLM spend at roughly $95-135/month on a daily
+cadence or $26-42/month weekly, plus a roughly flat ~$15-25/month for
+Railway hosting regardless of cadence. Not worth it for this project's
+scale — see `docs/progress.md` for the full breakdown.
+
+This project's final form runs locally: `agents/run_pipeline.py` for the
+pipeline, local JSONL storage under `data/runs/` as the permanent store,
+and `web/app.py` run locally for the dashboard.
 
 See `docs/progress.md` for the full status snapshot and calibration history,
 and `docs/architecture.md` / `docs/data-sources.md` for the underlying design

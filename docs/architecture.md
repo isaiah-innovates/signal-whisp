@@ -79,9 +79,19 @@ README.md                       # public-facing: problem, architecture, eval
                                  # scores, honest Falkster-stage roadmap
 ```
 
-## Deployment target (later — after both agent stages pass their evals)
+## Deployment target — decided against, 2026-07-22
 
-Railway: managed Postgres (raw posts, extracted signals, clusters, scores,
-eval run history), a scheduled worker service running ingest → extract →
-cluster → score daily, and a lightweight web service for the query interface
-and digest viewing. Secrets as Railway environment variables, never committed.
+Railway deployment (managed Postgres, a scheduled worker running the
+pipeline, and a hosted web service for the dashboard) was considered once
+all three agent stages became eval-passing, and rejected on cost grounds:
+measured actual token usage from a real pipeline run put ongoing LLM spend
+at roughly $95-135/month on a daily cadence or $26-42/month weekly, plus a
+roughly flat ~$15-25/month for Railway hosting regardless of cadence
+(estimate — Railway pricing itself wasn't verified live). Not worth it for
+this project's scale.
+
+**The project's final form runs locally**: `agents/run_pipeline.py` for the
+pipeline (run by hand, or a local cron/launchd job if a schedule is
+wanted), local JSONL storage under `data/runs/` as the permanent store (not
+a stopgap awaiting Postgres), and `web/app.py` run locally
+(`uvicorn web.app:app --reload`) for the dashboard.
