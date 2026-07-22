@@ -72,7 +72,14 @@ for it.
    with no textual basis (permanent, accepted limitation), and one
    defensible close-call disagreement using the same rule that fixed
    three other rows. Off-mission scope pruning held correctly across all
-   three eval runs.
+   three eval runs. **Wired into `agents/run_pipeline.py`** the same day:
+   `decide_clusters()` classifies every `ScoredCluster`, persists
+   `data/runs/<date>/decisions.jsonl`, and `render_digest()` now groups the
+   digest into Pursue/Watch/Discard sections (ranked by `overall_rank_score`
+   within each) instead of one flat list. Re-ran the full pipeline on real
+   data: 21/21 clusters classified with no failures (4 pursue / 11 watch /
+   6 discard) — output at `reports/2026-07-22.md` (overwritten) and
+   `data/runs/2026-07-22/decisions.jsonl`.
 9. **Railway deployment (Postgres + scheduled worker + web service)** — NOT
    STARTED, now unblocked (Decide is eval-passing). Per user decision on
    2026-07-22: nothing currently runs on a schedule (confirmed by
@@ -109,9 +116,11 @@ for it.
   365-day window), runs Sense-stage extraction, clusters. Does **not** write
   to the eval file — that stays a manual human step.
 - `agents/run_pipeline.py` — the full daily driver: ingest -> Sense ->
-  Discover (cluster + score) -> persist `data/runs/<date>/*.jsonl` -> render
-  `reports/<date>.md`. Reuses `pull_batch`/`extract_signals` from
-  `run_discover_pipeline.py` rather than duplicating them.
+  Discover (cluster + score) -> Decide (classify) -> persist
+  `data/runs/<date>/*.jsonl` (posts/signals/clusters/decisions) -> render
+  `reports/<date>.md`, grouped into Pursue/Watch/Discard sections. Reuses
+  `pull_batch`/`extract_signals` from `run_discover_pipeline.py` rather than
+  duplicating them.
 - `web/` — query API + minimal dashboard over everything `run_pipeline.py`
   has ever persisted. `store.py` loads/filters `data/runs/*/clusters.jsonl`;
   `app.py` (FastAPI) exposes `GET /api/clusters` and `GET /api/runs`, plus
@@ -120,6 +129,8 @@ for it.
   filters as GET params. No database — reads the JSONL files directly, per
   CLAUDE.md's stack conventions (Postgres arrives at Railway deployment,
   not before). Run with `uvicorn web.app:app --reload` from the repo root.
+  **Does not yet read `decisions.jsonl`** — `decide_action` isn't
+  filterable/visible in the dashboard yet, only in the rendered digest.
 - `agents/decide_agent.py` — Decide-stage classification. One `ScoredCluster`
   in, `DecideResult` out (`decide_action`, `rationale`). Forced tool use,
   LLM-as-judge (not a formula — see "Decide-stage design" below), passing

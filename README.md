@@ -61,7 +61,7 @@ flowchart TD
     EVAL2["evals/opportunity-scoring.md<br/>hand-labeled ground truth"]
     EVAL2 -.eval gate.-> SCORE
 
-    SCORE -.not wired into run_pipeline.py yet.-> DECIDE
+    SCORE --> DECIDE
 
     subgraph DecideStage["4. Decide"]
         DECIDE["agents/decide_agent.py<br/><i>pursue / watch / discard</i><br/>LLM-as-judge, not a formula"]
@@ -70,16 +70,15 @@ flowchart TD
     EVAL3["evals/decide-classification.md<br/>hand-labeled ground truth"]
     EVAL3 -.eval gate.-> DECIDE
 
-    DECIDE -.not wired into run_pipeline.py yet.-> DELIVER
-    SCORE --> DELIVER
+    DECIDE --> DELIVER
 
     subgraph DeliverStage["5. Deliver"]
-        DELIVER["agents/run_pipeline.py<br/>rank + render digest"]
+        DELIVER["agents/run_pipeline.py<br/>group by decide_action, rank, render digest"]
     end
 
-    DELIVER --> REPORT["reports/YYYY-MM-DD.md<br/>ranked opportunity digest"]
-    SCORE --> DATA["data/runs/YYYY-MM-DD/*.jsonl<br/>posts, signals, clusters"]
-    DATA --> WEBAPP["web/app.py (FastAPI)<br/>query API + dashboard"]
+    DELIVER --> REPORT["reports/YYYY-MM-DD.md<br/>Pursue/Watch/Discard digest"]
+    DECIDE --> DATA["data/runs/YYYY-MM-DD/*.jsonl<br/>posts, signals, clusters, decisions"]
+    DATA --> WEBAPP["web/app.py (FastAPI)<br/>query API + dashboard<br/><i>(clusters only — decisions not yet exposed)</i>"]
 
     style EVAL1 fill:#2d2d2d,stroke:#888,color:#fff,stroke-dasharray: 4 3
     style EVAL2 fill:#2d2d2d,stroke:#888,color:#fff,stroke-dasharray: 4 3
@@ -172,9 +171,8 @@ rows from one pipeline run, no held-out set.
   sense_agent.py                # Sense-stage extraction
   discover_agent.py              # Discover-stage clustering + scoring
   decide_agent.py                # Decide-stage pursue/watch/discard classification
-  run_pipeline.py                # full daily run: ingest -> Sense -> Discover -> digest
-                                 # (Decide not yet wired into this — see "what's not built yet")
-/data/runs/YYYY-MM-DD/          # raw posts, signals, scored clusters (JSONL) — gitignored
+  run_pipeline.py                # full daily run: ingest -> Sense -> Discover -> Decide -> digest
+/data/runs/YYYY-MM-DD/          # raw posts, signals, scored clusters, decisions (JSONL) — gitignored
 /reports/                       # generated daily digests — gitignored, not committed
 /web/
   app.py                        # FastAPI query API + server-rendered dashboard
@@ -190,16 +188,19 @@ cp .env.example .env   # fill in ANTHROPIC_API_KEY (required); STACKEXCHANGE_KEY
 python agents/run_pipeline.py
 ```
 
-This pulls a real batch from Stack Exchange and Hacker News, runs both LLM
-stages, and writes a ranked digest to `reports/<date>.md` plus raw
-posts/signals/clusters to `data/runs/<date>/*.jsonl`. It makes real Anthropic
-API calls and Stack Exchange/HN requests — expect it to take several minutes.
+This pulls a real batch from Stack Exchange and Hacker News, runs all three
+LLM stages, and writes a digest — grouped into Pursue/Watch/Discard sections,
+ranked by `overall_rank_score` within each — to `reports/<date>.md`, plus raw
+posts/signals/clusters/decisions to `data/runs/<date>/*.jsonl`. It makes real
+Anthropic API calls and Stack Exchange/HN requests — expect it to take
+several minutes.
 
-To check either stage against its eval instead of running the full pipeline:
+To check any stage against its eval instead of running the full pipeline:
 
 ```
 python evals/run_evals.py                     # Sense-stage
 python evals/run_discover_scoring_eval.py      # Discover-stage
+python evals/run_decide_eval.py                # Decide-stage
 ```
 
 To browse and filter every run's scored clusters — a dashboard plus a JSON
@@ -215,19 +216,18 @@ minimum `overall_rank_score`, or keyword), or query `GET /api/clusters` /
 
 ## What's not built yet
 
-- **Decide wired into the pipeline** — `agents/decide_agent.py` is built and
-  eval-passing (19/21), but `agents/run_pipeline.py`'s digest doesn't call
-  it yet; the digest still ranks purely by `overall_rank_score` without a
-  pursue/watch/discard label attached.
 - **A held-out eval set** — all Discover-stage and Decide-stage calibration
   has been checked against the same small hand-labeled set each was tuned
   on (16 and 21 rows respectively, both from a single pipeline run).
 - **Cybersecurity-vs-general-ops scope filtering at the Sense/Discover
   level** — the off-mission ops/reliability clusters (backup tooling, VPN
-  architecture) still pass through Sense and Discover unfiltered; Decide
-  does correctly catch and discard them, but only after they've already
-  been scored, clustered, and would appear in the digest if Decide isn't
-  in the loop yet (see the point above).
+  architecture) still pass through Sense and Discover unfiltered and get
+  scored/clustered before Decide catches and discards them; the digest's
+  Discard section is correct, but the earlier stages do the wasted work.
+- **Decide-stage data not yet in the `web/` dashboard** — the query API and
+  dashboard still read only `data/runs/*/clusters.jsonl`, not the
+  `decisions.jsonl` files `run_pipeline.py` now also writes, so
+  `decide_action` isn't filterable/visible there yet.
 - **Railway deployment** — hosting the existing `web/` app on Railway with a
   managed Postgres backend and a scheduled worker running the pipeline
   daily; not started, and deliberately sequenced after Decide lands rather
