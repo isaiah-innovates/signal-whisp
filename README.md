@@ -230,10 +230,23 @@ action), or query `GET /api/clusters` / `GET /api/runs` directly.
 Railway deployment (managed Postgres, a scheduled worker, a hosted web
 service) was evaluated once all three stages were eval-passing and
 **rejected on cost grounds**: measured actual token usage from a real
-pipeline run put ongoing LLM spend at roughly $95-135/month on a daily
-cadence or $26-42/month weekly, plus a roughly flat ~$15-25/month for
-Railway hosting regardless of cadence. Not worth it for this project's
-scale — see `docs/progress.md` for the full breakdown.
+pipeline run put a single full pull-and-process pass at roughly $2.66-4.00
+(186 posts -> Sense -> Discover -> Decide), which projected to roughly
+$95-135/month on a naive daily-repeat cadence or $26-42/month weekly, plus
+a roughly flat ~$15-25/month for Railway hosting regardless of cadence.
+
+That per-run estimate assumed every run re-pulls and re-processes the same
+~365-day batch from scratch — which was true at the time, but was itself a
+bug that's since been fixed: `agents/run_pipeline.py` now tracks a
+`last_run_at` cursor (`data/last_run.json`) and pulls incrementally since
+the last run, so *repeat* runs only cost whatever it takes to process
+genuinely new posts, not the full historical batch every time. A same-day
+rerun in testing pulled 0 new posts and cost $0 in LLM spend. The original
+monthly projection above is therefore a ceiling on repeat-run cost, not the
+real steady-state number — but it doesn't change the Railway decision
+itself, since the ~$15-25/month hosting floor was never about pipeline-run
+cost in the first place, and running this locally by hand costs nothing
+beyond the (now much cheaper) per-run LLM spend.
 
 This project's final form runs locally: `agents/run_pipeline.py` for the
 pipeline, local JSONL storage under `data/runs/` as the permanent store,
