@@ -122,15 +122,22 @@ for it.
   `pull_batch`/`extract_signals` from `run_discover_pipeline.py` rather than
   duplicating them.
 - `web/` — query API + minimal dashboard over everything `run_pipeline.py`
-  has ever persisted. `store.py` loads/filters `data/runs/*/clusters.jsonl`;
-  `app.py` (FastAPI) exposes `GET /api/clusters` and `GET /api/runs`, plus
-  `GET /` for a server-rendered HTML dashboard (Jinja2,
-  `templates/index.html`) with the same date-range/min-score/keyword
-  filters as GET params. No database — reads the JSONL files directly, per
-  CLAUDE.md's stack conventions (Postgres arrives at Railway deployment,
-  not before). Run with `uvicorn web.app:app --reload` from the repo root.
-  **Does not yet read `decisions.jsonl`** — `decide_action` isn't
-  filterable/visible in the dashboard yet, only in the rendered digest.
+  has ever persisted. `store.py` loads/filters `data/runs/*/clusters.jsonl`
+  **and `decisions.jsonl`** (matched by `cluster_id` per run; `decision` is
+  `None` for older runs predating the Decide-stage wiring or a failed
+  classification, never an error); `app.py` (FastAPI) exposes
+  `GET /api/clusters` (now includes `decide_action`/`decide_rationale`,
+  both nullable) and `GET /api/runs`, plus `GET /` for a server-rendered
+  HTML dashboard (Jinja2, `templates/index.html`) with
+  date-range/min-score/keyword/**decide_action** filters as GET params —
+  a decide-action badge (semantic color, separate from the page's accent
+  hue) and a separate rationale `<details>` block render per cluster. No
+  database — reads the JSONL files directly, per CLAUDE.md's stack
+  conventions (Postgres arrives at Railway deployment, not before). Run
+  with `uvicorn web.app:app --reload` from the repo root. Verified with
+  `TestClient` against the real 2026-07-22 data: `decide_action` filter
+  correctly returns 4/11/6 for pursue/watch/discard, badges render, and
+  the empty-state/combined-filter cases still work.
 - `agents/decide_agent.py` — Decide-stage classification. One `ScoredCluster`
   in, `DecideResult` out (`decide_action`, `rationale`). Forced tool use,
   LLM-as-judge (not a formula — see "Decide-stage design" below), passing

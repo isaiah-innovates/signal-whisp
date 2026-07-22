@@ -1,7 +1,7 @@
-"""Query API + minimal dashboard over historical Discover-stage output.
+"""Query API + minimal dashboard over historical Discover/Decide-stage output.
 
 Build-order step 6, second half — docs/architecture.md's "/web/ query API +
-minimal dashboard". Reads data/runs/*/clusters.jsonl written by
+minimal dashboard". Reads data/runs/*/{clusters,decisions}.jsonl written by
 agents/run_pipeline.py; no database yet, per CLAUDE.md's stack conventions
 (Postgres arrives at the Railway deployment step, not before).
 
@@ -43,11 +43,25 @@ def api_clusters(
     date_to: str | None = None,
     min_score: float | None = None,
     q: str | None = None,
+    decide_action: str | None = None,
 ) -> list[dict]:
-    """Scored clusters across all runs, filtered and ranked by overall_rank_score."""
+    """Scored clusters across all runs, filtered and ranked by overall_rank_score.
+
+    decide_action/rationale are included when a matching decisions.jsonl
+    entry exists for that run; both are null for runs predating the
+    Decide-stage wiring or a failed classification.
+    """
     records = load_all_clusters()
-    filtered = filter_clusters(records, date_from, date_to, min_score, q)
-    return [{"run_id": r.run_id, **asdict(r.cluster)} for r in filtered]
+    filtered = filter_clusters(records, date_from, date_to, min_score, q, decide_action)
+    return [
+        {
+            "run_id": r.run_id,
+            **asdict(r.cluster),
+            "decide_action": r.decision.decide_action if r.decision else None,
+            "decide_rationale": r.decision.rationale if r.decision else None,
+        }
+        for r in filtered
+    ]
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -57,9 +71,10 @@ def dashboard(
     date_to: str | None = None,
     min_score: float | None = None,
     q: str | None = None,
+    decide_action: str | None = None,
 ) -> HTMLResponse:
     records = load_all_clusters()
-    filtered = filter_clusters(records, date_from, date_to, min_score, q)
+    filtered = filter_clusters(records, date_from, date_to, min_score, q, decide_action)
     run_ids = sorted({r.run_id for r in records}, reverse=True)
     return templates.TemplateResponse(
         request,
@@ -73,6 +88,7 @@ def dashboard(
                 "date_to": date_to or "",
                 "min_score": "" if min_score is None else min_score,
                 "q": q or "",
+                "decide_action": decide_action or "",
             },
         },
     )

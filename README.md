@@ -78,7 +78,7 @@ flowchart TD
 
     DELIVER --> REPORT["reports/YYYY-MM-DD.md<br/>Pursue/Watch/Discard digest"]
     DECIDE --> DATA["data/runs/YYYY-MM-DD/*.jsonl<br/>posts, signals, clusters, decisions"]
-    DATA --> WEBAPP["web/app.py (FastAPI)<br/>query API + dashboard<br/><i>(clusters only — decisions not yet exposed)</i>"]
+    DATA --> WEBAPP["web/app.py (FastAPI)<br/>query API + dashboard<br/>filterable by decide_action"]
 
     style EVAL1 fill:#2d2d2d,stroke:#888,color:#fff,stroke-dasharray: 4 3
     style EVAL2 fill:#2d2d2d,stroke:#888,color:#fff,stroke-dasharray: 4 3
@@ -176,7 +176,7 @@ rows from one pipeline run, no held-out set.
 /reports/                       # generated daily digests — gitignored, not committed
 /web/
   app.py                        # FastAPI query API + server-rendered dashboard
-  store.py                      # loads/filters data/runs/*/clusters.jsonl (no DB yet)
+  store.py                      # loads/filters data/runs/*/{clusters,decisions}.jsonl (no DB yet)
   templates/index.html          # dashboard view (Jinja2)
 ```
 
@@ -211,8 +211,8 @@ uvicorn web.app:app --reload
 ```
 
 Then open `http://127.0.0.1:8000/` for the dashboard (filter by date range,
-minimum `overall_rank_score`, or keyword), or query `GET /api/clusters` /
-`GET /api/runs` directly.
+minimum `overall_rank_score`, keyword, or Decide `pursue`/`watch`/`discard`
+action), or query `GET /api/clusters` / `GET /api/runs` directly.
 
 ## What's not built yet
 
@@ -224,10 +224,6 @@ minimum `overall_rank_score`, or keyword), or query `GET /api/clusters` /
   architecture) still pass through Sense and Discover unfiltered and get
   scored/clustered before Decide catches and discards them; the digest's
   Discard section is correct, but the earlier stages do the wasted work.
-- **Decide-stage data not yet in the `web/` dashboard** — the query API and
-  dashboard still read only `data/runs/*/clusters.jsonl`, not the
-  `decisions.jsonl` files `run_pipeline.py` now also writes, so
-  `decide_action` isn't filterable/visible there yet.
 - **Railway deployment** — hosting the existing `web/` app on Railway with a
   managed Postgres backend and a scheduled worker running the pipeline
   daily; not started, and deliberately sequenced after Decide lands rather

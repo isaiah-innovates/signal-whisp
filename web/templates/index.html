@@ -18,6 +18,12 @@
     --score-low: #8a4b2e;
     --draft: #a35d2f;
     --focus: #1c6fd6;
+    --decide-pursue: #2f6b4f;
+    --decide-pursue-bg: #e3ede7;
+    --decide-watch: #8a6d1f;
+    --decide-watch-bg: #f3ecd9;
+    --decide-discard: #83766c;
+    --decide-discard-bg: #eae6df;
   }
 
   @media (prefers-color-scheme: dark) {
@@ -34,6 +40,12 @@
       --score-low: #e2a374;
       --draft: #e2a374;
       --focus: #6fb3ff;
+      --decide-pursue: #7fbf9e;
+      --decide-pursue-bg: #22352b;
+      --decide-watch: #d9b95c;
+      --decide-watch-bg: #35301f;
+      --decide-discard: #a89f93;
+      --decide-discard-bg: #2c2822;
     }
   }
 
@@ -50,6 +62,12 @@
     --score-low: #e2a374;
     --draft: #e2a374;
     --focus: #6fb3ff;
+    --decide-pursue: #7fbf9e;
+    --decide-pursue-bg: #22352b;
+    --decide-watch: #d9b95c;
+    --decide-watch-bg: #35301f;
+    --decide-discard: #a89f93;
+    --decide-discard-bg: #2c2822;
   }
   :root[data-theme="light"] {
     --bg: #f7f6f3;
@@ -64,6 +82,12 @@
     --score-low: #8a4b2e;
     --draft: #a35d2f;
     --focus: #1c6fd6;
+    --decide-pursue: #2f6b4f;
+    --decide-pursue-bg: #e3ede7;
+    --decide-watch: #8a6d1f;
+    --decide-watch-bg: #f3ecd9;
+    --decide-discard: #83766c;
+    --decide-discard-bg: #eae6df;
   }
 
   * { box-sizing: border-box; }
@@ -144,6 +168,21 @@
 
   form.filters input[name="q"] { min-width: 16rem; }
 
+  form.filters select {
+    font: inherit;
+    font-size: 0.9rem;
+    padding: 0.4rem 0.55rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg);
+    color: var(--text);
+    min-width: 9rem;
+  }
+  form.filters select:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 1px;
+  }
+
   form.filters button {
     font: inherit;
     font-size: 0.88rem;
@@ -204,6 +243,32 @@
   .score-chip[data-tier="high"] { color: var(--score-high); }
   .score-chip[data-tier="mid"] { color: var(--score-mid); }
   .score-chip[data-tier="low"] { color: var(--score-low); }
+
+  .decide-badge {
+    flex: none;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    align-self: center;
+  }
+  .decide-badge[data-action="pursue"] { color: var(--decide-pursue); background: var(--decide-pursue-bg); }
+  .decide-badge[data-action="watch"] { color: var(--decide-watch); background: var(--decide-watch-bg); }
+  .decide-badge[data-action="discard"] { color: var(--decide-discard); background: var(--decide-discard-bg); }
+  .decide-badge[data-action="unclassified"] { color: var(--text-muted); background: var(--accent-weak); }
+
+  details.decide-rationale summary {
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+  }
+  details.decide-rationale p {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin: 0.5rem 0 0;
+  }
 
   .opportunity {
     margin: 0;
@@ -277,7 +342,7 @@
 
 <header>
   <h1>Signal — opportunity query</h1>
-  <p>Ranked, filterable view over every Discover-stage run in <code>data/runs/</code>.</p>
+  <p>Ranked, filterable view over every Discover/Decide-stage run in <code>data/runs/</code>.</p>
 </header>
 
 <main>
@@ -293,6 +358,15 @@
     <div class="field">
       <label for="min_score">Min score</label>
       <input id="min_score" type="number" name="min_score" step="0.05" min="0" max="1" value="{{ filters.min_score }}">
+    </div>
+    <div class="field">
+      <label for="decide_action">Decide</label>
+      <select id="decide_action" name="decide_action">
+        <option value="" {{ "selected" if not filters.decide_action }}>Any</option>
+        <option value="pursue" {{ "selected" if filters.decide_action == "pursue" }}>Pursue</option>
+        <option value="watch" {{ "selected" if filters.decide_action == "watch" }}>Watch</option>
+        <option value="discard" {{ "selected" if filters.decide_action == "discard" }}>Discard</option>
+      </select>
     </div>
     <div class="field">
       <label for="q">Search</label>
@@ -315,6 +389,7 @@
     <article class="cluster">
       <div class="cluster-head">
         <span class="score-chip" data-tier="{{ 'high' if c.overall_rank_score >= 0.6 else ('mid' if c.overall_rank_score >= 0.3 else 'low') }}">{{ "%.2f"|format(c.overall_rank_score) }}</span>
+        <span class="decide-badge" data-action="{{ r.decision.decide_action if r.decision else 'unclassified' }}">{{ r.decision.decide_action if r.decision else 'unclassified' }}</span>
         <p class="opportunity">{{ c.opportunity_statement }}</p>
       </div>
       <p class="meta-line">
@@ -328,8 +403,14 @@
         <span>willingness&nbsp;to&nbsp;pay <span class="val">{{ "%.2f"|format(c.willingness_to_pay_signal) }}</span></span>
         <span>novelty <span class="val draft">{{ "%.2f"|format(c.novelty) }} (draft)</span></span>
       </div>
+      {% if r.decision %}
+      <details class="decide-rationale">
+        <summary>Decide rationale ({{ r.decision.decide_action }})</summary>
+        <p>{{ r.decision.rationale }}</p>
+      </details>
+      {% endif %}
       <details class="rationale">
-        <summary>Rationale</summary>
+        <summary>Discover rationale</summary>
         <p>{{ c.rationale }}</p>
       </details>
       <div class="signals">
@@ -346,6 +427,7 @@
 <footer>
   <code>novelty</code> is DRAFT/human-review-only per <code>evals/opportunity-scoring.md</code>'s rubric — never treat it as final.
   <code>overall_rank_score</code> is a calibrated-but-unproven formula; see <code>docs/progress.md</code>'s "Scoring design" section for current accuracy and known gaps.
+  <code>decide_action</code> is an eval-passing (19/21) LLM classification, not a certainty — see <code>docs/progress.md</code>'s "Decide-stage design" section. Clusters marked <code>unclassified</code> predate the Decide-stage wiring or failed classification that run.
 </footer>
 
 </body>

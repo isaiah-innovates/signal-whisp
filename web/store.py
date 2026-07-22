@@ -1,4 +1,5 @@
-"""Loads and filters historical Discover-stage output from data/runs/*/clusters.jsonl.
+"""Loads and filters historical Discover/Decide-stage output from
+data/runs/*/{clusters,decisions}.jsonl.
 
 No database yet — Postgres arrives at the Railway deployment step per
 CLAUDE.md's stack conventions, not before. This reads directly off the
@@ -11,6 +12,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from agents.decide_agent import DecideResult
 from agents.discover_agent import ScoredCluster
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "runs"
@@ -20,13 +22,30 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "runs"
 class PersistedCluster:
     run_id: str  # YYYY-MM-DD, the run's directory name
     cluster: ScoredCluster
+    decision: DecideResult | None  # None if decisions.jsonl is missing/older run or classification failed
+
+
+def _load_decisions(run_dir: Path) -> dict[str, DecideResult]:
+    decisions_path = run_dir / "decisions.jsonl"
+    if not decisions_path.exists():
+        return {}
+    by_cluster_id = {}
+    for line in decisions_path.read_text().splitlines():
+        if not line.strip():
+            continue
+        fields = json.loads(line)
+        by_cluster_id[fields["cluster_id"]] = DecideResult(**fields)
+    return by_cluster_id
 
 
 def load_all_clusters(data_dir: Path = DATA_DIR) -> list[PersistedCluster]:
-    """Read every run's clusters.jsonl, tagging each row with its run_id.
+    """Read every run's clusters.jsonl (+ decisions.jsonl if present),
+    tagging each row with its run_id and matching decision.
 
     run_id strings are YYYY-MM-DD, so plain string comparison is a valid
-    date-range filter — no date parsing needed.
+    date-range filter — no date parsing needed. Older runs predating the
+    Decide-stage wiring have no decisions.jsonl at all; decision is None
+    for those rather than raising.
     """
     records: list[PersistedCluster] = []
     if not data_dir.exists():
@@ -36,11 +55,19 @@ def load_all_clusters(data_dir: Path = DATA_DIR) -> list[PersistedCluster]:
         clusters_path = run_dir / "clusters.jsonl"
         if not clusters_path.exists():
             continue
+        decisions = _load_decisions(run_dir)
         for line in clusters_path.read_text().splitlines():
             if not line.strip():
                 continue
             fields = json.loads(line)
-            records.append(PersistedCluster(run_id=run_dir.name, cluster=ScoredCluster(**fields)))
+            cluster = ScoredCluster(**fields)
+            records.append(
+                PersistedCluster(
+                    run_id=run_dir.name,
+                    cluster=cluster,
+                    decision=decisions.get(cluster.cluster_id),
+                )
+            )
     return records
 
 
@@ -50,6 +77,7 @@ def filter_clusters(
     date_to: str | None = None,
     min_score: float | None = None,
     q: str | None = None,
+    decide_action: str | None = None,
 ) -> list[PersistedCluster]:
     """Filter and rank by overall_rank_score descending."""
     out = records
@@ -67,4 +95,6 @@ def filter_clusters(
             if needle in r.cluster.opportunity_statement.lower()
             or needle in r.cluster.rationale.lower()
         ]
+    if decide_action:
+        out = [r for r in out if r.decision is not None and r.decision.decide_action == decide_action]
     return sorted(out, key=lambda r: -r.cluster.overall_rank_score)
