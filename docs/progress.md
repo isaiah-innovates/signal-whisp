@@ -49,17 +49,26 @@ for it.
    empty-results state all render correctly. Also smoke-tested with a live
    `uvicorn` process on port 8420. Not visually eyeballed in a browser this
    session (no browser tool available) — only checked programmatically.
-7. **Hand-label `evals/decide-classification.md`** — SKELETON ONLY, started
-   2026-07-22. Target schema and a draft rubric (score-threshold/floor
-   based, per user decision) are written; all 21 candidate rows are real
-   `ScoredCluster` output from the 2026-07-22 pipeline run, but every
-   `decide_action`/`rationale` is a `PENDING` placeholder — no hand-labeling
-   done yet. Three open questions for the labeler are called out in the
-   file itself (single-signal-but-high-score handling, whether a hard
-   score floor should force `discard` independent of other fields, and
-   whether `novelty` should factor in at all given it's DRAFT-only).
+7. **Hand-label `evals/decide-classification.md`** — DONE, 2026-07-22. All 21
+   real candidate rows (from the 2026-07-22 pipeline run) labeled by the
+   human labeler conversationally, batch by batch: 4 `pursue`, 9 `watch`,
+   8 `discard`, each with a written rationale. Key finding from the labeling
+   (see the file's "Patterns observed" section): the draft score-threshold
+   rubric does **not** cleanly hold — the 6 rows at the
+   `small_team_feasibility` floor split 3 `discard`/3 `watch` on a judgment
+   no existing field encodes (is the feasibility blocker durable, e.g.
+   "have to be Microsoft/a carrier to solve" → `discard`, or possibly
+   temporary, e.g. "look for feasibility to change, then evaluate again"
+   → `watch`). `novelty` was never cited as a driver in any of the 21.
+   All 3 previously-flagged off-mission ops/reliability clusters
+   (cluster-7/8/9 — mariadb-backup, DR/RTO, WireGuard multi-site VPN) were
+   independently labeled `discard` as off-mission, suggesting Decide is
+   where that scope gap naturally gets enforced.
 8. **Build the Decide-stage classification agent** (`agents/decide_agent.py`)
-   — NOT STARTED. Blocked on step 7 per stage discipline.
+   — NOT STARTED, now unblocked. Per the file's updated "Definition of
+   done," this likely needs an LLM-as-judge approach (like
+   `discover_agent.py`'s tier classification) rather than a pure formula,
+   since a clean threshold rule didn't fall out of the real labels.
 9. **Railway deployment (Postgres + scheduled worker + web service)** — NOT
    STARTED. Per user decision on 2026-07-22: deploy once after Decide is
    eval-passing, not now — nothing currently runs on a schedule (confirmed
@@ -107,11 +116,12 @@ for it.
   filters as GET params. No database — reads the JSONL files directly, per
   CLAUDE.md's stack conventions (Postgres arrives at Railway deployment,
   not before). Run with `uvicorn web.app:app --reload` from the repo root.
-- `evals/decide-classification.md` — Decide-stage eval, SKELETON. Target
-  schema + draft rubric written; 21 real candidate rows pulled from
-  `data/runs/2026-07-22/clusters.jsonl`; `decide_action`/`rationale` all
-  PENDING (no hand-labeling done). Read this file's rubric section and
-  open questions before hand-labeling or building `decide_agent.py`.
+- `evals/decide-classification.md` — Decide-stage ground truth, DONE. 21
+  real clusters (from `data/runs/2026-07-22/clusters.jsonl`), each hand-labeled
+  `pursue`/`watch`/`discard` with written rationale (4/9/8 split). Read
+  this file's "Patterns observed" section before building `decide_agent.py`
+  — a pure score-threshold rubric didn't hold, so the agent likely needs
+  LLM-as-judge, not a formula.
 - `evals/signal-extraction.md` — Sense-stage ground truth, real hand-labeled
   rows, passing.
 - `evals/opportunity-scoring.md` — Discover-stage ground truth. 16 real
@@ -275,15 +285,15 @@ decision for the user, not a task in progress.
 
 ## Where to pick this up
 
-**Immediate next step (as of 2026-07-22):** hand-label
-`evals/decide-classification.md` — it's a skeleton with 21 real candidate
-rows and no ground truth yet. Per stage discipline, `agents/decide_agent.py`
-doesn't get built until that's done, and Railway deployment (build order
-step 9) waits on the agent passing its eval.
-
-For the Decide stage: read `evals/decide-classification.md` in full first
-(rubric + the three open questions it names), then hand-label rows before
-writing any agent code.
+**Immediate next step (as of 2026-07-22):** build
+`agents/decide_agent.py` against `evals/decide-classification.md`, now
+that all 21 rows are hand-labeled. Read the file's "Patterns observed"
+section first — the labeling showed a pure score-threshold rubric doesn't
+cleanly separate `watch` from `discard` at the feasibility floor, so this
+probably needs an LLM-as-judge design (tiers/rationale-aware, like
+`discover_agent.py`'s feasibility/willingness classification) rather than
+a formula like `compute_overall_rank_score`. Railway deployment (build
+order step 9) still waits on this agent passing its eval.
 
 For the Discover-stage scoring work (lower priority right now, not
 blocking): read `evals/opportunity-scoring.md`'s status paragraph and
