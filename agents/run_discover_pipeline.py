@@ -59,8 +59,18 @@ HN_QUERIES = [
 DAYS_BACK = 365
 
 
-def pull_batch() -> list[Post]:
-    fromdate = int(time.time()) - DAYS_BACK * 86400
+def pull_batch(fromdate: int | None = None) -> list[Post]:
+    """Pull posts across all configured tags/queries.
+
+    `fromdate` (unix timestamp) lets callers pull incrementally since a
+    prior run instead of always re-pulling the full trailing window — see
+    agents/run_pipeline.py, which tracks a last-run cursor for exactly this.
+    Defaults to the full DAYS_BACK-day window when not given, which is what
+    this module's own eval-building use (agents/run_discover_pipeline.py's
+    main()) wants.
+    """
+    if fromdate is None:
+        fromdate = int(time.time()) - DAYS_BACK * 86400
     posts: list[Post] = []
 
     for tag in SE_SECURITY_TAGS:
@@ -94,7 +104,13 @@ def pull_batch() -> list[Post]:
             continue
         seen.add(post.permalink)
         deduped.append(post)
-    return deduped
+
+    # HN's relevance-ranked /search (by_date=False, used above) has no
+    # fromdate param at the API level, unlike the Stack Exchange calls above
+    # — so without this, HN results ignore the window entirely and old
+    # relevance-ranked hits leak into a supposedly-bounded pull. Apply the
+    # cutoff uniformly, post-fetch, across every source.
+    return [p for p in deduped if p.created_utc >= fromdate]
 
 
 def extract_signals(posts: list[Post]) -> list[ExtractionResult]:

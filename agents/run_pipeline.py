@@ -14,12 +14,19 @@ by downstream processing" — a re-run on the same day overwrites that day's
 own files, but never a prior day's. The rendered digest goes to
 reports/<run_id>.md, grouped by decide_action (pursue/watch/discard) rather
 than a single flat ranked list.
+
+Pulls incrementally since the last successful run (data/last_run.json)
+rather than always re-pulling pull_batch's full 365-day window — otherwise
+every repeat run re-fetches and re-extracts nearly the same posts, which is
+most of this pipeline's real per-run cost (see docs/progress.md's Railway
+cost estimate). First run (no cursor yet) falls back to the full window.
 """
 
 from __future__ import annotations
 
 import json
 import sys
+import time
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -39,6 +46,13 @@ from sources.models import Post  # noqa: E402
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = REPO_ROOT / "data" / "runs"
 REPORTS_DIR = REPO_ROOT / "reports"
+LAST_RUN_FILE = REPO_ROOT / "data" / "last_run.json"
+
+# Subtracted from the recorded last-run timestamp before using it as the next
+# fromdate, to cover indexing lag (a post created just before the previous
+# run may not have been searchable/indexed yet by SE/HN at pull time) and
+# clock skew between this machine and the two APIs.
+OVERLAP_SECONDS = 3600
 
 _ACTION_ORDER = ["pursue", "watch", "discard"]
 _ACTION_HEADINGS = {
@@ -46,6 +60,17 @@ _ACTION_HEADINGS = {
     "watch": "Watch",
     "discard": "Discard",
 }
+
+
+def _load_last_run_at() -> int | None:
+    if not LAST_RUN_FILE.exists():
+        return None
+    return json.loads(LAST_RUN_FILE.read_text())["last_run_at"]
+
+
+def _save_last_run_at(ts: int) -> None:
+    LAST_RUN_FILE.parent.mkdir(parents=True, exist_ok=True)
+    LAST_RUN_FILE.write_text(json.dumps({"last_run_at": ts}))
 
 
 def _write_jsonl(path: Path, records: list) -> None:
@@ -170,9 +195,25 @@ def main() -> None:
 
     print(f"=== Pipeline run {run_id} ===\n")
 
-    posts: list[Post] = pull_batch()
+    last_run_at = _load_last_run_at()
+    if last_run_at is None:
+        print("No prior run recorded — pulling the full trailing 365-day window.")
+        fromdate = None
+    else:
+        fromdate = last_run_at - OVERLAP_SECONDS
+        since = datetime.fromtimestamp(fromdate, tz=timezone.utc).isoformat()
+        print(f"Incremental pull: fetching posts since {since} "
+              f"(last run + {OVERLAP_SECONDS}s overlap buffer).")
+
+    posts: list[Post] = pull_batch(fromdate=fromdate)
+    pull_completed_at = int(time.time())
     print(f"Pulled {len(posts)} unique posts.")
     _write_jsonl(run_dir / "posts.jsonl", posts)
+    # Advance the cursor as soon as the pull itself succeeds — a downstream
+    # Sense/Discover/Decide failure on an individual post is already handled
+    # per-item (see [SKIP] logging below) and shouldn't cause next run to
+    # re-fetch posts we've already pulled and stored.
+    _save_last_run_at(pull_completed_at)
 
     signals = extract_signals(posts)
     print(f"\n{len(signals)} of {len(posts)} posts judged is_signal=true.")

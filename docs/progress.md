@@ -93,11 +93,42 @@ for it.
    cron/launchd job, if wanted later) and `web/app.py` run locally for the
    dashboard. Nothing currently runs on a schedule and that's the accepted
    end state, not a gap.
-   Separately noted while costing this out: `pull_batch()` always pulls a
-   trailing 365-day window rather than incrementally since the last run,
-   so both daily and weekly cadences would reprocess mostly-overlapping
-   posts every run — a real inefficiency if the pipeline is ever run on a
-   schedule by hand, independent of the deployment decision.
+   Separately noted while costing this out, and then fixed the same day:
+   `pull_batch()` used to always pull a trailing 365-day window rather than
+   incrementally since the last run, so repeat runs (daily, weekly, or by
+   hand) would reprocess mostly-overlapping posts every time.
+10. **Fix `pull_batch()`'s non-incremental pull** — DONE, 2026-07-22.
+    `agents/run_pipeline.py` now tracks a `last_run_at` cursor in
+    `data/last_run.json` (gitignored) and passes it to `pull_batch(fromdate=...)`
+    with a 1-hour overlap buffer, instead of always requesting the full
+    365-day window. First run with no cursor falls back to the old
+    365-day-window behavior automatically. `run_discover_pipeline.py`'s own
+    `main()` (the eval-building path) is unaffected — it still calls
+    `pull_batch()` with no `fromdate`, so it keeps pulling the full window
+    on purpose.
+
+    A second, unrelated bug got fixed as a side effect of adding a
+    post-fetch date filter: HN's relevance-ranked `/search` (used with
+    `by_date=False` for better relevance than `/search_by_date`) has no
+    `fromdate` parameter at the API level at all, unlike the Stack Exchange
+    calls — so HN results were **never actually bounded by the 365-day
+    window** before this fix, regardless of cadence. `pull_batch()` now
+    applies `created_utc >= fromdate` uniformly across all sources,
+    post-fetch. Real, measured effect: the first real run after this fix
+    pulled **79 posts, down from 186** in the prior day's run under
+    identical query config — meaning over half of every previous "365-day"
+    batch was actually older, off-window HN posts leaking through.
+
+    Verified: offline (cursor save/load round-trip, overlap-buffer math,
+    and the date filter against synthetic posts spanning the cutoff) and
+    against two real, consecutive live runs — first run (no prior cursor)
+    correctly fell back to the full window and wrote the cursor; second
+    run, seconds later, correctly computed `fromdate` from the cursor and
+    pulled **0 posts** (nothing new existed in that window), meaning **zero
+    Sense-stage extraction calls and zero LLM cost** on that run — direct
+    confirmation of the savings this was built to capture. The early-return
+    path when no signals are extracted correctly avoids overwriting the
+    prior run's real digest/`clusters.jsonl`/`decisions.jsonl`.
 
 ## What exists right now
 
@@ -131,7 +162,9 @@ for it.
   `data/runs/<date>/*.jsonl` (posts/signals/clusters/decisions) -> render
   `reports/<date>.md`, grouped into Pursue/Watch/Discard sections. Reuses
   `pull_batch`/`extract_signals` from `run_discover_pipeline.py` rather than
-  duplicating them.
+  duplicating them. Tracks a `last_run_at` cursor in `data/last_run.json`
+  (gitignored) so repeat runs pull incrementally instead of always
+  re-fetching the full 365-day window — see build order step 10.
 - `web/` — query API + minimal dashboard over everything `run_pipeline.py`
   has ever persisted. `store.py` loads/filters `data/runs/*/clusters.jsonl`
   **and `decisions.jsonl`** (matched by `cluster_id` per run; `decision` is
@@ -376,19 +409,16 @@ decision for the user, not a task in progress.
 - Finalize/merge the blog post drafts (which pieces from post 1 vs. post 2
   make the final cut) and decide on/edit posts 3-5 before anything gets
   published externally.
-- `pull_batch()`'s trailing-365-day, non-incremental pull (see build order
-  step 9's note) — worth fixing if the pipeline gets run on any regular
-  cadence by hand, independent of the (declined) Railway deployment.
 
 ## Where to pick this up
 
 **Status as of 2026-07-22:** all three stages (Sense, Discover, Decide) are
-eval-passing, the digest and dashboard are wired end-to-end, and Railway
+eval-passing, the digest and dashboard are wired end-to-end, Railway
 deployment (build order step 9) has been **decided against** on cost
-grounds — this project's final form runs locally. There's no single
+grounds, and `pull_batch()`'s incremental-pull fix (build order step 10) is
+done and verified against real consecutive runs. There's no single
 "immediate next step" queued; remaining open items are the blog post
-drafts, the `pull_batch()` incremental-pull fix, and the held-out-eval-set
-question, none of them blocking.
+drafts and the held-out-eval-set question, neither blocking.
 
 If Decide-stage classification itself gets revisited: read
 `evals/decide-classification.md`'s "Patterns observed" section and

@@ -88,6 +88,12 @@ specs (auth, endpoints, rate limits, field mapping) are in `docs/data-sources.md
    `agents/run_pipeline.py` for the pipeline, `web/app.py` for the
    dashboard. This is the project's final state, not a stopgap awaiting
    deployment.
+10. Fix `pull_batch()`'s non-incremental (always-365-days) pull — DONE,
+    2026-07-22. `run_pipeline.py` now tracks a `last_run_at` cursor
+    (`data/last_run.json`) so repeat runs pull incrementally; also fixed a
+    related bug where HN's relevance search had no date bound at all,
+    which was letting off-window posts leak into every prior run
+    regardless of cadence.
 
 No dates attached to this — it's sequence, not a schedule.
 
